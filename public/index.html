@@ -3,6 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <link rel="worker" href="%PUBLIC_URL%/worker.js" />
+    <link rel="quantibwasm" href="%PUBLIC_URL%/quantlib.wasm" />
+    <link rel="quantlibjs" href="%PUBLIC_URL%/quantlib.js" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <meta
@@ -39,5 +42,8 @@
       To begin the development, run `npm start` or `yarn start`.
       To create a production bundle, use `npm run build` or `yarn build`.
     -->
+    <!--<script>
+      const worker = new Worker('worker.js', { type: 'module' });
+    </script>-->
   </body>
 </html>
