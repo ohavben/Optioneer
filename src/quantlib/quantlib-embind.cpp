@@ -1,16 +1,8 @@
-// Build with:
-// emcc --bind -I${EMSCRIPTEN}/system/include -I${QUANTLIB} -I${BOOST} -O3 -s MODULARIZE=1 -s
-// "EXTRA_EXPORTED_RUNTIME_METHODS=['addOnPostRun']" -s EXPORT_NAME=QuantLib -s TOTAL_MEMORY=64MB -o
-// quantlib-embind.js quantlib-embind.cpp ${QUANTLIB}/ql/.libs/libQuantLib.a
-
-// https://www.quantlib.org/slides/dima-ql-intro-1.pdf
-
 #include <emscripten/bind.h>
 #include <malloc.h>
 #include <iostream>
 #include <iomanip>
 #include <string>
-// #include "nlohmann/json.hpp"
 #include "json.hpp"
 
 #include "ql/qldefines.hpp"
@@ -856,31 +848,7 @@ namespace
 
             DayCounter dayCounter = Actual365Fixed();
             Time maturity = dayCounter.yearFraction(settlementDate, exerciseDate);
-
-            //std::cout << "option type = " << type << std::endl;
-            //std::cout << "Time to maturity = " << maturity << std::endl;
-            //std::cout << "Underlying price = " << underlying << std::endl;
-            //std::cout << "Risk-free interest rate = " << io::rate(riskFreeRate) << std::endl;
-            //std::cout << "Dividend yield = " << io::rate(dividendYield) << std::endl;
-            //std::cout << "Volatility = " << io::volatility(volatility) << std::endl;
-            //std::cout << std::endl;
-
             std::string method;
-            //std::cout << std::endl;
-
-            // write column headings
-            //Size widths[] = {35, 14, 14};
-            //Size totalWidth = widths[0] + widths[1] + widths[2];
-            //std::string rule(totalWidth, '-'), dblrule(totalWidth, '=');
-
-            //std::cout << dblrule << std::endl;
-            //std::cout << "Tsiveriotis-Fernandes method" << std::endl;
-            //std::cout << dblrule << std::endl;
-            //std::cout << std::setw(widths[0]) << std::left << "Tree type" << std::setw(widths[1])
-            //          << std::left << "European" << std::setw(widths[1]) << std::left << "American"
-            //          << std::endl;
-
-            //std::cout << rule << std::endl;
 
             ext::shared_ptr<Exercise> exercise(new EuropeanExercise(exerciseDate));
             ext::shared_ptr<Exercise> amExercise(new AmericanExercise(settlementDate, exerciseDate));
@@ -926,9 +894,6 @@ namespace
                 new BinomialConvertibleEngine<JarrowRudd>(stochasticProcess, timeSteps)));
             americanBond.setPricingEngine(ext::shared_ptr<PricingEngine>(
                 new BinomialConvertibleEngine<JarrowRudd>(stochasticProcess, timeSteps)));
-            //std::cout << std::setw(widths[0]) << std::left << method << std::fixed
-            //          << std::setw(widths[1]) << std::left << europeanBond.NPV() << std::setw(widths[2])
-            //          << std::left << americanBond.NPV() << std::endl;
 
             jData["response"]["Tsiveriotis-Fernandes method"]["treeType"]["Jarrow-Rudd"]["American"]
                  ["NPV"] = americanBond.NPV();
@@ -940,9 +905,7 @@ namespace
                 new BinomialConvertibleEngine<CoxRossRubinstein>(stochasticProcess, timeSteps)));
             americanBond.setPricingEngine(ext::shared_ptr<PricingEngine>(
                 new BinomialConvertibleEngine<CoxRossRubinstein>(stochasticProcess, timeSteps)));
-            //std::cout << std::setw(widths[0]) << std::left << method << std::fixed
-            //          << std::setw(widths[1]) << std::left << europeanBond.NPV() << std::setw(widths[2])
-            //          << std::left << americanBond.NPV() << std::endl;
+         
             jData["response"]["Tsiveriotis-Fernandes method"]["treeType"]["Cox-Ross-Rubinstein"]
                  ["American"]["NPV"] = americanBond.NPV();
             jData["response"]["Tsiveriotis-Fernandes method"]["treeType"]["Cox-Ross-Rubinstein"]
@@ -953,9 +916,6 @@ namespace
                 new BinomialConvertibleEngine<AdditiveEQPBinomialTree>(stochasticProcess, timeSteps)));
             americanBond.setPricingEngine(ext::shared_ptr<PricingEngine>(
                 new BinomialConvertibleEngine<AdditiveEQPBinomialTree>(stochasticProcess, timeSteps)));
-            //std::cout << std::setw(widths[0]) << std::left << method << std::fixed
-            //          << std::setw(widths[1]) << std::left << europeanBond.NPV() << std::setw(widths[2])
-            //          << std::left << americanBond.NPV() << std::endl;
 
             jData["response"]["Tsiveriotis-Fernandes method"]["treeType"]["Additive equiprobabilities"]
                  ["American"]["NPV"] = americanBond.NPV();
@@ -967,9 +927,6 @@ namespace
                 new BinomialConvertibleEngine<Trigeorgis>(stochasticProcess, timeSteps)));
             americanBond.setPricingEngine(ext::shared_ptr<PricingEngine>(
                 new BinomialConvertibleEngine<Trigeorgis>(stochasticProcess, timeSteps)));
-            //std::cout << std::setw(widths[0]) << std::left << method << std::fixed
-            //          << std::setw(widths[1]) << std::left << europeanBond.NPV() << std::setw(widths[2])
-            //          << std::left << americanBond.NPV() << std::endl;
 
             jData["response"]["Tsiveriotis-Fernandes method"]["treeType"]["Trigeorgis"]["American"]
                  ["NPV"] = americanBond.NPV();
@@ -981,9 +938,6 @@ namespace
                 new BinomialConvertibleEngine<Tian>(stochasticProcess, timeSteps)));
             americanBond.setPricingEngine(ext::shared_ptr<PricingEngine>(
                 new BinomialConvertibleEngine<Tian>(stochasticProcess, timeSteps)));
-            //std::cout << std::setw(widths[0]) << std::left << method << std::fixed
-            //          << std::setw(widths[1]) << std::left << europeanBond.NPV() << std::setw(widths[2])
-            //          << std::left << americanBond.NPV() << std::endl;
 
             jData["response"]["Tsiveriotis-Fernandes method"]["treeType"]["Tian"]["American"]["NPV"] =
                 americanBond.NPV();
@@ -995,9 +949,6 @@ namespace
                 new BinomialConvertibleEngine<LeisenReimer>(stochasticProcess, timeSteps)));
             americanBond.setPricingEngine(ext::shared_ptr<PricingEngine>(
                 new BinomialConvertibleEngine<LeisenReimer>(stochasticProcess, timeSteps)));
-            //std::cout << std::setw(widths[0]) << std::left << method << std::fixed
-            //          << std::setw(widths[1]) << std::left << europeanBond.NPV() << std::setw(widths[2])
-            //          << std::left << americanBond.NPV() << std::endl;
 
             jData["response"]["Tsiveriotis-Fernandes method"]["treeType"]["Leisen-Reimer"]["American"]
                  ["NPV"] = americanBond.NPV();
@@ -1009,17 +960,12 @@ namespace
                 new BinomialConvertibleEngine<Joshi4>(stochasticProcess, timeSteps)));
             americanBond.setPricingEngine(ext::shared_ptr<PricingEngine>(
                 new BinomialConvertibleEngine<Joshi4>(stochasticProcess, timeSteps)));
-            //std::cout << std::setw(widths[0]) << std::left << method << std::fixed
-            //          << std::setw(widths[1]) << std::left << europeanBond.NPV() << std::setw(widths[2])
-            //          << std::left << americanBond.NPV() << std::endl;
 
             jData["response"]["Tsiveriotis-Fernandes method"]["treeType"]["Joshi"]["American"]["NPV"] =
                 americanBond.NPV();
             jData["response"]["Tsiveriotis-Fernandes method"]["treeType"]["Joshi"]["European"]["NPV"] =
                 europeanBond.NPV();
 
-            //std::cout << dblrule << std::endl;
-            //std::cout << "result: " << std::setw(4) << jData["response"] << std::endl;
             std::string result = jData.dump();
             return result;
         }
@@ -1041,8 +987,6 @@ namespace
         {
 
             json jData = json::parse(data);
-
-            //std::cout << std::endl;
 
             Calendar calendar = TARGET();
             Date todaysDate(DateParser::parseISO(jData["request"]["todaysDate"].get<std::string>()));
@@ -1145,47 +1089,25 @@ namespace
                         .withFloatingLegCalendar(calendar)
                         .withNominal(100.)
                         .withType(swapType));
-
-            //std::cout << "-- Correction in the contract fix rate in bp --" << std::endl;
-            /* The paper plots correction to be substracted, here is printed
-            with its sign
-            */
+         
             for (Size i = 0; i < riskySwaps.size(); i++)
             {
-                //std::cout << std::fixed << std::setprecision(3);
-                //std::cout << std::setw(4);
                 riskySwaps[i].setPricingEngine(riskFreeEngine);
                 // should recover the input here:
                 Real nonRiskyFair = riskySwaps[i].fairRate();
-                //std::cout << tenorsSwapMkt[i];
-                //std::cout << std::setw(5);
                 jData["response"]["tenorsSwapMkt"][i] = tenorsSwapMkt[i];
-                //std::cout << " | " << io::rate(nonRiskyFair);
-                //std::cout << std::fixed << std::setprecision(2);
-                //std::cout << std::setw(5); 
-                //jData["response"]["nonRiskyFairRate"][i] = io::rate(nonRiskyFair);
                 // Low Risk:
                 riskySwaps[i].setPricingEngine(ctptySwapCvaLow);
-                //std::cout << " | " << std::setw(6)
-                //          << 10000. * (riskySwaps[i].fairRate() - nonRiskyFair);
-                // cout << " | " << setw(6) << riskySwaps[i].NPV() ;
+             
                 jData["response"]["lowRisk"][i] = 10000. * (riskySwaps[i].fairRate() - nonRiskyFair);
                 // Medium Risk:
                 riskySwaps[i].setPricingEngine(ctptySwapCvaMedium);
-                //std::cout << " | " << std::setw(6)
-                //          << 10000. * (riskySwaps[i].fairRate() - nonRiskyFair);
-                // cout << " | " << setw(6) << riskySwaps[i].NPV() ;
+             
                 jData["response"]["MediumRisk"][i] = 10000. * (riskySwaps[i].fairRate() - nonRiskyFair);
                 riskySwaps[i].setPricingEngine(ctptySwapCvaHigh);
-                //std::cout << " | " << std::setw(6)
-                //          << 10000. * (riskySwaps[i].fairRate() - nonRiskyFair);
-                // cout << " | " << setw(6) << riskySwaps[i].NPV() ;
+             
                 jData["response"]["HighRisk"][i] = 10000. * (riskySwaps[i].fairRate() - nonRiskyFair);
-                //std::cout << std::endl;
             }
-
-            //std::cout << std::endl;
-            //std::cout << "JDATA" << std::setw(4) << jData << std::endl;
             std::string result = jData.dump();
             return result;
         }
@@ -1201,8 +1123,7 @@ namespace
             return "unknown error";
         }
     }
-
-// This block of code must be under all the pricers  
+  
     EMSCRIPTEN_BINDINGS(quantlib)
     {
         emscripten::function("calculateConvertibleBonds", &calculateConvertibleBonds);
