@@ -152,5 +152,3 @@
     "docker-cli-js": "^2.9.0"
   }
 }
-
-docker run -v ../../${pwd}/public:/dist --rm ql "emcc --bind -I${EMSCRIPTEN}/system/include -I${QUANTLIB} -I${BOOST} -O3 -s MODULARIZE=1 -s EXPORT_ES6=1 -s BUILD_AS_WORKER=1 -s \"EXPORTED_RUNTIME_METHODS=['addOnPostRun']\" -s EXPORT_NAME=QuantLib -s TOTAL_MEMORY=64MB -o /quantlibMod.js quantlib-embind.cpp ${QUANTLIB}/ql/.libs/libQuantLib.a"
