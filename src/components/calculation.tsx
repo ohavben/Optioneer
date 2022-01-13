@@ -34,10 +34,9 @@ class Calculation extends React.Component<Props>{
         try {
             let temp = CVAIRS;
             temp.request.id = performance.now().toString();
-            console.log("CVAIRS: ", CVAIRS.request.id)
-            console.log("temp: ", temp.request.id)
+            console.log(`requesting calculation: ${temp.request.id}: `, temp.request)
             let test = await this.props.calculate(temp)
-            console.log("click test: " , test)
+            console.log(`result for calculation ${temp.request.id}: ` , JSON.parse(test).response)
         }catch(error){
             console.log(`error in worker: ${error}`)
         }
