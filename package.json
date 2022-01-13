@@ -3,15 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build-emscripten": "docker build -t emscripten-quantlib ./config/emscripten",
-    "compile-wasm":"cp -r ./src/quantlib/json.hpp ./src/quantlib/quantlib.cpp ./config/emscripten && docker run -v ${pwd}:/dist --rm ql 'emcc --bind -I${EMSCRIPTEN}/system/include -I${QUANTLIB} -I${BOOST} -O3 -s MODULARIZE=1 -s EXPORT_ES6=1 -s BUILD_AS_WORKER=1 -s \"EXPORTED_RUNTIME_METHODS=['addOnPostRun']\" -s EXPORT_NAME=QuantLib -s TOTAL_MEMORY=64MB -o /quantlib.js quantlib-embind.cpp ${QUANTLIB}/ql/.libs/libQuantLib.a'", 
-    "build-wasm": "docker build -t ql .",
-    "get-wasm": "docker run -v ${pwd}/public:/dist --rm ql cp -r quantlib.js quantlib.wasm ./dist",
-    "build-quantlib": "npm run build-wasm && npm run get-wasm",
+    "build-quantlib":"docker run oby1/emscripten_2.0.22-quantlib_1.22:1 -v ${pwd}:/optioneer --rm ql 'emcc --bind -I${EMSCRIPTEN}/system/include -I${QUANTLIB} -I${BOOST} -O3 -s MODULARIZE=1 -s EXPORT_ES6=1 -s BUILD_AS_WORKER=1 -s \"EXPORTED_RUNTIME_METHODS=['addOnPostRun']\" -s EXPORT_NAME=QuantLib -s TOTAL_MEMORY=64MB -o /optioneer/public/quantlib.js /optioneer/src/quantlib/quantlib-embind.cpp ${QUANTLIB}/ql/.libs/libQuantLib.a'", 
     "start": "node scripts/start.js",
     "build": "node scripts/build.js",
-    "test": "node scripts/test.js",
-    "build-Quantlib":"node scripts/build-quantlib.js"
+    "test": "node scripts/test.js"
   },
   "dependencies": {
     "@babel/core": "^7.16.0",

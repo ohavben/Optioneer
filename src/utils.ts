@@ -13,12 +13,6 @@ interface Subscription {
     reject:  (reason?: any) => void;
 }
 
-interface Subscriptions {
-    //even though we specify the key to be of type number,
-    // in run time it's a string like "675.4445646"
-    children:Subscription;
-}
-
 export function debounce (fn: Function, ms: number) {
     let timeoutId: ReturnType<typeof setTimeout>;
     return function (this: any, ...args: any[]) {
@@ -98,14 +92,10 @@ export function pricer (url:string){
     pricer.onerror = (e => console.log("ERROR in worker: ", e))
 
     function workerListerner(event: { data: string }){
-        console.log(event)
-        console.log("SUBS: " , subs)
-        //console.log("SUB: ", subs[key])
         let { data } =  event;
         let calaculationResponse = JSON.parse(data);
         let key = calaculationResponse.request.id.toString();
         let response = subs.get(key)
-        console.log("looking for subscription: ", response)
         if (!response) {
             console.log(`no subsciption found for key ${key}`)
             return
@@ -113,26 +103,11 @@ export function pricer (url:string){
         response.resolve(data)
         subs.delete(key)
         return 
-        /*console.log("SUB: ", subs[key])
-        //console.log("worker recieved calculstion id: ", key, " for: ", subs[key])
-        //, key = data.request.id.toString(), payload = JSON.stringify(data);
-        //console.log("worker sent message: ", typeof data.request.id, ': ', data.request.id, data)
-        //even though we specify the key to be of type number,
-        // in run time it's a string like "675.4445646"
-        if (!subs[key]) {
-            console.log("no sub for this id: ", key , ": ", data)
-            return
-        } 
-        subs[key].resolve(data)
-        return delete subs[key]*/
     }
 
     function publish(sub:Subscription, data: _RegularBonds_Type | _CVAIRS_Type | _ConvertibleBonds_Type | _CallableBonds_Type){
         if (data.request.id){
             subs.set(data.request.id.toString(), sub)
-            console.log("SUBS:", subs)
-            //subs[data.request.id.toString()] = sub
-            console.log("publishing data: " , data)
             return pricer.postMessage(JSON.stringify(data))
         } else {
             return sub.reject('no id sent')
@@ -154,35 +129,3 @@ export function pricer (url:string){
 
     return { analyze: async (data: _RegularBonds_Type | _CVAIRS_Type | _ConvertibleBonds_Type | _CallableBonds_Type ) => await subscribe(data) }
 }
-
-
-
-/*
-Today’s Little Program isn’t even a program. It’s just a function.
-
-The problem statement is as follows: Given a nonempty JavaScript array of numbers, find the index of the smallest value. (If the smallest value appears more than once, then any such index is acceptable.)
-
-One solution is simply to do the operation manually, simulating how you would perform the operation with paper and pencil: You start by saying that the first element is the winner, and then you go through the rest of the elements. If the next element is smaller than the one you have, you declare that element the new provisional winner.
-
-function indexOfSmallest(a) {
- var lowest = 0;
- for (var i = 1; i < a.length; i++) {
-  if (a[i] < a[lowest]) lowest = i;
- }
- return lowest;
-}
-Another solution is to use the reduce intrinsic to run the loop, so you merely have to provide the business logic of the initial guess and the if statement.
-
-function indexOfSmallest(a) {
- return a.reduce(function(lowest, next, index) {
-                   return next < a[lowest] : index ? lowest; },
-                 0);
-}
-A third solution is to use JavaScript intrinsics to find the smallest element and then convert the element to its index.
-
-function indexOfSmallest(a) {
- return a.indexOf(Math.min.apply(Math, a));
-}
-https://devblogs.microsoft.com/oldnewthing/20140526-00/?p=903
-
-*/
