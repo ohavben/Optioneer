@@ -6,13 +6,13 @@ import React, {Component} from "react";
 //import LeftSideBar from "./components/LeftSideBar";
 //import RightSideBar from "./components/RightSideBar";
 //import MainContent from "./components/MainContent";
-import Calculation from "./calculation";
-import { _RegularBonds_Type, _CVAIRS_Type, _ConvertibleBonds_Type, _CallableBonds_Type } from "../marketDataInterface"
+import Calculation from "./Calculation";
+import {_option_type } from "../utils"
 
 type Props = {
     App : {
         "dbName": string,
-        "pricer":{ analyze: (data: _RegularBonds_Type | _CVAIRS_Type | _ConvertibleBonds_Type | _CallableBonds_Type) => Promise<string> },
+        "pricer":{ analyze: (data: _option_type) => Promise<string> },
         "dimensions":{
           "width":number,
           "height":number
@@ -35,6 +35,7 @@ class App  extends Component <Props, State>{
     )
   }
 }
+
 export default App;
 
 

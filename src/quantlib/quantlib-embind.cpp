@@ -105,6 +105,24 @@
 #include <vector>
 /* end of Callable Bonds */
 
+/*Options*/
+#include <ql/instruments/vanillaoption.hpp>
+#include <ql/pricingengines/vanilla/binomialengine.hpp>
+#include <ql/pricingengines/vanilla/analyticeuropeanengine.hpp>
+#include <ql/pricingengines/vanilla/analytichestonengine.hpp>
+#include <ql/pricingengines/vanilla/baroneadesiwhaleyengine.hpp>
+#include <ql/pricingengines/vanilla/bjerksundstenslandengine.hpp>
+#include <ql/pricingengines/vanilla/batesengine.hpp>
+#include <ql/pricingengines/vanilla/integralengine.hpp>
+#include <ql/pricingengines/vanilla/fdblackscholesvanillaengine.hpp>
+#include <ql/pricingengines/vanilla/mceuropeanengine.hpp>
+#include <ql/pricingengines/vanilla/mcamericanengine.hpp>
+#include <ql/pricingengines/vanilla/analyticeuropeanvasicekengine.hpp>
+#include <ql/time/calendars/target.hpp>
+#include <ql/utilities/dataformatters.hpp>
+#include <ql/models/shortrate/onefactormodels/vasicek.hpp>
+/*end of options*/
+
 using namespace std;
 using namespace QuantLib;
 using namespace emscripten;
@@ -329,8 +347,6 @@ namespace
         {
 
             json incomingJsonData = json::parse(data);
-
-            std::cout << std::endl;
 
             /*********************
              ***  MARKET DATA  ***
@@ -1123,6 +1139,759 @@ namespace
             return "unknown error";
         }
     }
+
+    std::string calculateBermudianOption(std::string data){
+        try {
+            json JsonData = json::parse(data);
+
+            Calendar calendar = TARGET();
+
+            Date todaysDate = Date(DateParser::parseISO(jData["request"]["todaysDate"].get<std::string>()));
+            Date settlementDate = Date(DateParser::parseISO(jData["request"]["settlementDate"].get<std::string>()));
+            Settings::instance().evaluationDate() = today;
+
+            // our options
+            (JsonData["request"]["optionType"] == "put")
+                ?Option::Type type(Option::Put)
+                :Option::Type type(Option::Call)
+
+            Real underlying = JsonData["request"]["realUnderlying"];
+            Real strike = JsonData["request"]["strikePrice"];
+            Spread dividendYield = JsonData["request"]["dividendYield"];
+            Rate riskFreeRate = JsonData["request"]["riskFreeRate"];
+            Volatility volatility = JsonData["request"]["volatility"];
+            Date maturity = Date(DateParser::parseISO(jData["request"]["MaturityDate"].get<std::string>()));
+            DayCounter dayCounter = Actual365Fixed();
+
+            std::vector<Date> exerciseDates;
+            for (Integer i=1; i<=4; i++)
+                exerciseDates.push_back(settlementDate + 3*i*Months);
+
+            ext::shared_ptr<Exercise> bermudanExercise(
+                new BermudanExercise(exerciseDates)
+            );
+
+            Handle<Quote> underlyingH(
+                ext::shared_ptr<Quote>(
+                    new SimpleQuote(underlying)
+                )
+            );
+
+            // bootstrap the yield/dividend/vol curves
+            Handle<YieldTermStructure> flatTermStructure(
+                ext::shared_ptr<YieldTermStructure>(
+                    new FlatForward(
+                        settlementDate,
+                        riskFreeRate, 
+                        dayCounter
+                    )
+                )
+            );
+
+            Handle<YieldTermStructure> flatDividendTS(
+                ext::shared_ptr<YieldTermStructure>(
+                    new FlatForward(
+                        settlementDate, 
+                        dividendYield, 
+                        dayCounter
+                    )
+                )
+            );
+
+            Handle<BlackVolTermStructure> flatVolTS(
+                ext::shared_ptr<BlackVolTermStructure>(
+                    new BlackConstantVol(
+                        settlementDate, 
+                        calendar, 
+                        volatility,
+                        dayCounter
+                    )
+                )
+            );
+
+            ext::shared_ptr<StrikedTypePayoff> payoff(
+                new PlainVanillaPayoff(
+                    type, 
+                    strike
+                )
+            );
+
+            ext::shared_ptr<BlackScholesMertonProcess> bsmProcess(
+                new BlackScholesMertonProcess(
+                    underlyingH, 
+                    flatDividendTS,
+                    flatTermStructure, 
+                    flatVolTS
+                )
+            );
+ 
+            VanillaOption bermudanOption(payoff, bermudanExercise);
+
+             // Finite differences
+            Size timeSteps = JsonData["request"]["FiniteDifferencesTimeSteps"];
+            ext::shared_ptr<PricingEngine> fdengine =
+                ext::make_shared<FdBlackScholesVanillaEngine>(
+                    bsmProcess,
+                    timeSteps,
+                    timeSteps-1
+                );
+            bermudanOption.setPricingEngine(fdengine);
+
+            JsonData["response"]["NPV"]["Finite-differences"] = europeanOption.NPV();
+    
+            // Binomial method: Jarrow-Rudd
+            bermudanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<JarrowRudd>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial-Jarrow-Rudd"] = europeanOption.NPV();
+
+
+            //"Binomial Cox-Ross-Rubinstein";;
+            bermudanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<CoxRossRubinstein>(
+                        bsmProcess,
+                        timeSteps
+                    
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial-Cox-Ross-Rubinstein"] = europeanOption.NPV();
+
+            // Binomial method: Additive equiprobabilities
+            bermudanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<AdditiveEQPBinomialTree>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Additive-equiprobabilities"] = europeanOption.NPV();
+
+            // Binomial method: Binomial Trigeorgis
+            bermudanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<Trigeorgis>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial Trigeorgis"] = europeanOption.NPV();
+
+            // Binomial method: Binomial Tian
+            bermudanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<Tian>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Heston-semi-analytic"] = europeanOption.NPV();
+
+            // Binomial method: Binomial Leisen-Reimer
+            bermudanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<LeisenReimer>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial Leisen-Reimer"] = europeanOption.NPV();
+
+            // Binomial method: Binomial Joshi 
+            bermudanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<Joshi4>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial Joshi"] = europeanOption.NPV();
+
+            return JsonData.dump()
+        }
+        catch (std::exception &e)
+        {
+            std::cerr << e.what() << std::endl;
+            return e.what();
+        }
+        catch (...)
+        {
+            std::cerr << "unknown error" << std::endl;
+            return "unknown error";
+        }
+    }
+
+    std::string calcuateEuropeanOption(std::string data){
+        try {
+
+            json JsonData = json::parse(data);
+
+            Calendar calendar = TARGET();
+
+            Date todaysDate = Date(DateParser::parseISO(jData["request"]["todaysDate"].get<std::string>()));
+            Date settlementDate = Date(DateParser::parseISO(jData["request"]["settlementDate"].get<std::string>()));
+            Settings::instance().evaluationDate() = today;
+
+            // our options
+            (JsonData["request"]["optionType"] == "put")
+                ?Option::Type type(Option::Put)
+                :Option::Type type(Option::Call)
+
+            Real underlying = JsonData["request"]["realUnderlying"];
+            Real strike = JsonData["request"]["strikePrice"];
+            Spread dividendYield = JsonData["request"]["dividendYield"];
+            Rate riskFreeRate = JsonData["request"]["riskFreeRate"];
+            Volatility volatility = JsonData["request"]["volatility"];
+            Date maturity = Date(DateParser::parseISO(jData["request"]["MaturityDate"].get<std::string>()));
+            DayCounter dayCounter = Actual365Fixed();
+
+            std::vector<Date> exerciseDates;
+            for (Integer i=1; i<=4; i++)
+                exerciseDates.push_back(settlementDate + 3*i*Months);
+
+            ext::shared_ptr<Exercise> europeanExercise(
+                new EuropeanExercise(maturity));
+
+            Handle<Quote> underlyingH(
+                ext::shared_ptr<Quote>(
+                    new SimpleQuote(
+                        underlying
+                    )
+                )
+            );
+
+            // bootstrap the yield/dividend/vol curves
+            Handle<YieldTermStructure> flatTermStructure(
+                ext::shared_ptr<YieldTermStructure>(
+                    new FlatForward(
+                        settlementDate,
+                        riskFreeRate, 
+                        dayCounter
+                    )
+                )
+            );
+
+            Handle<YieldTermStructure> flatDividendTS(
+                ext::shared_ptr<YieldTermStructure>(
+                    new FlatForward(
+                        settlementDate, 
+                        dividendYield, 
+                        dayCounter
+                    )
+                )
+            );
+
+            Handle<BlackVolTermStructure> flatVolTS(
+                ext::shared_ptr<BlackVolTermStructure>(
+                    new BlackConstantVol(
+                        settlementDate, 
+                        calendar, 
+                        volatility,
+                        dayCounter
+                    )
+                )
+            );
+
+            ext::shared_ptr<StrikedTypePayoff> payoff(
+                new PlainVanillaPayoff(
+                    type, 
+                    strike
+                )
+            );
+
+            ext::shared_ptr<BlackScholesMertonProcess> bsmProcess(
+                new BlackScholesMertonProcess(
+                    underlyingH, 
+                    flatDividendTS,
+                    flatTermStructure, 
+                    flatVolTS
+                )
+            );
+
+            VanillaOption europeanOption(payoff, europeanExercise);
+
+            // Black-Scholes for European
+            method = "Black-Scholes";
+            europeanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new AnalyticEuropeanEngine(bsmProcess)
+                )
+            );
+            
+            JsonData["response"]["NPV"]["Black-Scholes"] = europeanOption.NPV()
+            
+            //Vasicek rates model for European "Black Vasicek Model";
+            Real r0 = riskFreeRate;
+            Real a = JsonData["request"]["Black Vasicek Model"]["a"];
+            Real b = JsonData["request"]["Black Vasicek Model"]["b"];;
+            Real sigma_r = JsonData["request"]["Black Vasicek Model"]["sigma_r"];
+            Real riskPremium = JsonData["request"]["Black Vasicek Model"]["riskPremium"];
+            Real correlation = JsonData["request"]["Black Vasicek Model"]["correlation"];
+
+            ext::shared_ptr<Vasicek> vasicekProcess(
+                new Vasicek(r0, a, b, sigma_r, riskPremium)
+            );
+
+            europeanOption.setPricingEngine
+                (ext::shared_ptr<PricingEngine>(
+                    new AnalyticBlackVasicekEngine(
+                        bsmProcess, 
+                        vasicekProcess, 
+                        correlation
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Black-Vasicek-Model"] = europeanOption.NPV()
+
+            // semi-analytic Heston for European "Heston semi-analytic";
+            ext::shared_ptr<HestonProcess> hestonProcess(
+                new HestonProcess(
+                    flatTermStructure, 
+                    flatDividendTS,
+                    underlyingH, 
+                    volatility*volatility,
+                    1.0, 
+                    volatility*volatility, 
+                    0.001, 
+                    0.0
+                )
+            );
+
+            ext::shared_ptr<HestonModel> hestonModel(
+                new HestonModel(hestonProcess)
+            );
+
+            europeanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new AnalyticHestonEngine(hestonModel)
+                    )
+            );
+
+            JsonData["response"]["NPV"]["Heston-semi-analytic"] = europeanOption.NPV();
+    
+            // semi-analytic Bates for European "Bates semi-analytic";
+            ext::shared_ptr<BatesProcess> batesProcess(
+                new BatesProcess(
+                    flatTermStructure, 
+                    flatDividendTS,
+                    underlyingH, 
+                    volatility*volatility, 
+                    1.0, 
+                    volatility*volatility, 
+                    0.001, 
+                    0.0,
+                    1e-14, 
+                    1e-14, 
+                    1e-14
+                )
+            );
+
+            ext::shared_ptr<BatesModel> batesModel(new BatesModel(batesProcess));
+
+            europeanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BatesEngine(
+                        batesModel
+                    )
+                )
+            );
+            
+            JsonData["response"]["NPV"]["Bates-semi-analytic"] = europeanOption.NPV();
+
+            // Integral (euro)
+            europeanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new IntegralEngine(
+                        bsmProcess
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Integral"] = europeanOption.NPV();
+
+            // Finite differences
+            Size timeSteps = JsonData["request"]["FiniteDifferencesTimeSteps"];
+            ext::shared_ptr<PricingEngine> fdengine =
+                ext::make_shared<FdBlackScholesVanillaEngine>(
+                    bsmProcess,
+                    timeSteps,
+                    timeSteps-1
+                );
+            europeanOption.setPricingEngine(fdengine);
+
+            JsonData["response"]["NPV"]["Finite-differences"] = europeanOption.NPV();
+    
+            // Binomial method: Jarrow-Rudd
+            europeanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<JarrowRudd>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial Jarrow-Rudd"] = europeanOption.NPV();
+
+            europeanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<CoxRossRubinstein>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial Cox-Ross-Rubinstein"] = europeanOption.NPV();
+    
+            // Binomial method: Additive equiprobabilities
+            europeanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<AdditiveEQPBinomialTree>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+            JsonData["response"]["NPV"]["Additive equiprobabilities"] = europeanOption.NPV();
+            
+            // Binomial method: Binomial Trigeorgis
+            europeanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<Trigeorgis>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial Trigeorgis"] = europeanOption.NPV();
+            
+            // Binomial method: Binomial Tian
+            europeanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<Tian>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial Tian"] = europeanOption.NPV();
+
+            // Binomial method: Binomial Leisen-Reimer
+            europeanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<LeisenReimer>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial Leisen-Reimer"] = europeanOption.NPV();
+            
+            // Binomial method: Binomial Joshi
+            method = "Binomial Joshi";
+            europeanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<Joshi4>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial Joshi"] = europeanOption.NPV();
+
+            // Monte Carlo Method: MC (crude)
+            timeSteps = JsonData["request"]["MonteCarloCrude"]["timeSteps"];
+            method = "MC (crude)";
+            Size mcSeed = JsonData["request"]["MonteCarloCrude"]["timeSteps"];
+            ext::shared_ptr<PricingEngine> mcengine1;
+
+            mcengine1 = MakeMCEuropeanEngine<PseudoRandom>(bsmProcess)
+                .withSteps(timeSteps)
+                .withAbsoluteTolerance(0.02)
+                .withSeed(mcSeed);
+
+            europeanOption.setPricingEngine(mcengine1);
+
+            // Real errorEstimate = europeanOption.errorEstimate();
+
+            JsonData["response"]["NPV"]["MonteCarlo(crude)"] = europeanOption.NPV();
+
+            // Monte Carlo Method: QMC (Sobol)
+            Size nSamples = JsonData["request"]["MonteCarlo-QMC(Sobol)"][nSamples];  // 2^15
+    
+            ext::shared_ptr<PricingEngine> mcengine2;
+
+            mcengine2 = MakeMCEuropeanEngine<LowDiscrepancy>(bsmProcess)
+                .withSteps(timeSteps)
+                .withSamples(nSamples);
+
+            europeanOption.setPricingEngine(mcengine2);
+
+            JsonData["response"]["NPV"]["MonteCarlo-QMC(Sobol)"] = europeanOption.NPV();
+
+
+            return JsonData.dump();
+        } 
+        catch (std::exception &e)
+        {
+            std::cerr << e.what() << std::endl;
+            return e.what();
+        }
+        catch (...)
+        {
+            std::cerr << "unknown error" << std::endl;
+            return "unknown error";
+        }
+    }
+
+    std::string calcuateAmericanOption(std::string data){
+        try {
+            json JsonData = json::parse(data);
+
+            Calendar calendar = TARGET();
+
+            Date todaysDate = Date(DateParser::parseISO(jData["request"]["todaysDate"].get<std::string>()));
+            Date settlementDate = Date(DateParser::parseISO(jData["request"]["settlementDate"].get<std::string>()));
+            Settings::instance().evaluationDate() = today;
+
+            // our options
+            (JsonData["request"]["optionType"] == "put")
+                ?Option::Type type(Option::Put)
+                :Option::Type type(Option::Call)
+
+            Real underlying = JsonData["request"]["realUnderlying"];
+            Real strike = JsonData["request"]["strikePrice"];
+            Spread dividendYield = JsonData["request"]["dividendYield"];
+            Rate riskFreeRate = JsonData["request"]["riskFreeRate"];
+            Volatility volatility = JsonData["request"]["volatility"];
+            Date maturity = Date(DateParser::parseISO(jData["request"]["MaturityDate"].get<std::string>()));
+            DayCounter dayCounter = Actual365Fixed();
+
+            std::vector<Date> exerciseDates;
+            for (Integer i=1; i<=4; i++)
+                exerciseDates.push_back(settlementDate + 3*i*Months);
+
+            ext::shared_ptr<Exercise> americanExercise(
+                new AmericanExercise(
+                    settlementDate,
+                    maturity
+                )
+            );
+
+            Handle<Quote> underlyingH(
+                ext::shared_ptr<Quote>(
+                    new SimpleQuote(underlying)
+                )
+            );
+
+            // bootstrap the yield/dividend/vol curves
+            Handle<YieldTermStructure> flatTermStructure(
+                ext::shared_ptr<YieldTermStructure>(
+                    new FlatForward(
+                        settlementDate,
+                        riskFreeRate,
+                        dayCounter
+                    )
+                )
+            );
+
+            Handle<YieldTermStructure> flatDividendTS(
+                ext::shared_ptr<YieldTermStructure>(
+                    new FlatForward(
+                        settlementDate,
+                        dividendYield,
+                        dayCounter
+                    )
+                )
+            );
+
+            Handle<BlackVolTermStructure> flatVolTS(
+                ext::shared_ptr<BlackVolTermStructure>(
+                    new BlackConstantVol(
+                        settlementDate,
+                        calendar,
+                        volatility,
+                        dayCounter
+                    )
+                )
+            );
+
+            ext::shared_ptr<StrikedTypePayoff> payoff(
+                new PlainVanillaPayoff(type, strike)
+            );
+
+            ext::shared_ptr<BlackScholesMertonProcess> bsmProcess(
+                new BlackScholesMertonProcess(
+                    underlyingH,
+                    flatDividendTS,
+                    flatTermStructure,
+                    flatVolTS
+                )
+            );
+
+            VanillaOption americanOption(payoff, americanExercise);
+
+            // Barone-Adesi and Whaley approximation for American
+            americanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BaroneAdesiWhaleyApproximationEngine(bsmProcess)
+                )
+            );
+
+            JsonData["response"]["NPV"]["Barone-Adesi/Whaley"] = americanOption.NPV()
+    
+            // Bjerksund and Stensland approximation for American
+            americanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BjerksundStenslandApproximationEngine(bsmProcess)
+                )
+            );
+
+            JsonData["response"]["NPV"]["Bjerksund/Stensland"] = americanOption.NPV()
+
+            // Finite differences
+            //Size timeSteps = 801;
+            Size timeSteps = JsonData["request"]["FiniteDifferencesTimeSteps"]
+            ext::shared_ptr<PricingEngine> fdengine =
+                ext::make_shared<FdBlackScholesVanillaEngine>(
+                    bsmProcess,
+                    timeSteps,
+                    timeSteps-1
+                );
+
+            americanOption.setPricingEngine(fdengine);
+            JsonData["response"]["NPV"]["Finite-Differences"] = americanOption.NPV()
+
+            // Binomial method: Jarrow-Rudd
+            americanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<JarrowRudd>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+            JsonData["response"]["NPV"]["Binomial-Jarrow-Rudd"] = americanOption.NPV()
+
+            // "Binomial Cox-Ross-Rubinstein";
+            americanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<CoxRossRubinstein>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial-Cox-Ross-Rubinstein"] = americanOption.NPV()
+            
+            // Binomial method: Additive equiprobabilities
+            americanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<AdditiveEQPBinomialTree>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Additive-equiprobabilities"] = americanOption.NPV()
+            
+            // Binomial method: Binomial Trigeorgis
+            americanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<Trigeorgis>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial-Trigeorgis"] = americanOption.NPV()
+
+            // Binomial method: Binomial Tian
+            americanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<Tian>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial-Tian"] = americanOption.NPV()
+            
+            // Binomial-Leisen-Reimer
+            americanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<LeisenReimer>(
+                        bsmProcess,
+                        timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial-Leisen-Reimer"] = americanOption.NPV()
+            
+            // Binomial method: Binomial Joshi
+            americanOption.setPricingEngine(
+                ext::shared_ptr<PricingEngine>(
+                    new BinomialVanillaEngine<Joshi4>(
+                        bsmProcess,timeSteps
+                    )
+                )
+            );
+
+            JsonData["response"]["NPV"]["Binomial-Joshi"] = americanOption.NPV()
+            
+            // Monte Carlo Method: MC (Longstaff Schwartz)
+            ext::shared_ptr<PricingEngine> mcengine3;
+            mcengine3 = MakeMCAmericanEngine<PseudoRandom>(bsmProcess)
+                .withSteps(100)
+                .withAntitheticVariate()
+                .withCalibrationSamples(4096)
+                .withAbsoluteTolerance(0.02)
+                .withSeed(mcSeed);
+            americanOption.setPricingEngine(mcengine3);
+            JsonData["response"]["NPV"]["Monte-Carlo-Longstaff Schwartz"] = americanOption.NPV()
+
+            return JsonData.dump();
+        } 
+        catch(std::exception &e)
+        {
+            std::cerr << e.what() << std::endl;
+            return e.what();
+        }
+        catch (...)
+        {
+            std::cerr << "unknown error" << std::endl;
+            return "unknown error";
+        }
+    }
   
     EMSCRIPTEN_BINDINGS(quantlib)
     {
@@ -1130,6 +1899,9 @@ namespace
         emscripten::function("calculateRegularBond", &calculateRegularBond);
         emscripten::function("calculateCallableBonds", &calculateCallableBonds);
         emscripten::function("calculateCVAIRS", &calculateCVAIRS);
+        emscripten::function("calculateAmericanOptions", &calculateAmericanOptions);
+        emscripten::function("calculateEuropeanOptions", &calculateEuropeanOptions);
+        emscripten::function("calculateBermudianOptions", &calculateBermudianOptions);
     }
 
 }

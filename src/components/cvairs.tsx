@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { CVAIRS } from "../marketData"
+/*import { CVAIRS } from "../marketData"
 
 
 function Cvairs(){

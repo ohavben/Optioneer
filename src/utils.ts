@@ -1,4 +1,20 @@
-import { _RegularBonds_Type, _CVAIRS_Type, _ConvertibleBonds_Type, _CallableBonds_Type } from "./marketDataInterface"
+export type _option_type = {
+    "request": {
+        "excerciseStyle": 0 | 1 | 2,
+        "id":number | null,
+        "todaysDate":string,
+        "settlementDate": string,
+        "maturityDate": string,
+        "optionType": 1 | -1,
+        "underlying": number,
+        "strike": number,
+        "dividendYield": number,
+        "riskFreeRate": number,
+        "optionPrice": number
+    },
+    "response":{},
+    "errors":{}
+}
 
 type Prefix =  {
     dom: string;
@@ -8,7 +24,7 @@ type Prefix =  {
 }
 
 interface Subscription {
-    id:string;
+    id:number;
     resolve: (value: string | PromiseLike<string>) => void;
     reject:  (reason?: any) => void;
 }
@@ -92,10 +108,13 @@ export function pricer (url:string){
     pricer.onerror = (e => console.log("ERROR in worker: ", e))
 
     function workerListerner(event: { data: string }){
+        console.log('utils worker')
         let { data } =  event;
         let calaculationResponse = JSON.parse(data);
-        let key = calaculationResponse.request.id.toString();
+        let key = calaculationResponse.request.id;
+        console.log('response id: ', key)
         let response = subs.get(key)
+
         if (!response) {
             console.log(`no subsciption found for key ${key}`)
             return
@@ -105,20 +124,21 @@ export function pricer (url:string){
         return 
     }
 
-    function publish(sub:Subscription, data: _RegularBonds_Type | _CVAIRS_Type | _ConvertibleBonds_Type | _CallableBonds_Type){
+    function publish(sub:Subscription, data:_option_type){
         if (data.request.id){
-            subs.set(data.request.id.toString(), sub)
+            subs.set(data.request.id, sub)
             return pricer.postMessage(JSON.stringify(data))
         } else {
             return sub.reject('no id sent')
         } 
     }
 
-    function subscribe (data: _RegularBonds_Type | _CVAIRS_Type | _ConvertibleBonds_Type | _CallableBonds_Type):Promise<string> {
+    function subscribe (data: _option_type):Promise<string> {
+        console.log('request id: ', data.request.id)
         return new Promise((resolve, reject) => {
             return (data.request.id)
             ?publish({
-                id: data.request.id.toString(),
+                id: data.request.id,
                 resolve: resolve,
                 reject: reject,
             }, data )
@@ -127,5 +147,5 @@ export function pricer (url:string){
         });
     }
 
-    return { analyze: async (data: _RegularBonds_Type | _CVAIRS_Type | _ConvertibleBonds_Type | _CallableBonds_Type ) => await subscribe(data) }
+    return { analyze: async (data:_option_type) => await subscribe(data) }
 }

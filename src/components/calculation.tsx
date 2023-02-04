@@ -1,42 +1,45 @@
 import React , { useState } from "react";
-import {
-     _RegularBonds_Type,
-     _CVAIRS_Type,
-    _ConvertibleBonds_Type, 
-    _CallableBonds_Type,
-    _RegularBonds_Interface,
-     _CVAIRS_Interface,
-    _ConvertibleBonds_Interface, 
-    _CallableBonds_Interface
-} from "../marketDataInterface"
-import { RegularBonds, CVAIRS, ConvertibleBonds, CallableBonds } from "../marketData"
+//import { option } from "../marketData"
+import {_option_type } from "../utils"
 //import { formik } 
+
 type Props = {
-    calculate:(data:_RegularBonds_Type | _CVAIRS_Type | _ConvertibleBonds_Type | _CallableBonds_Type) => Promise<string>
+    calculate:(data:_option_type) => Promise<string>
 }
 
 class Calculation extends React.Component<Props>{
     constructor(props:Props){
         super(props)
-        /*this.state = JSON.parse(JSON.stringify(this.props.marketData))/*{ 
-            rawData: JSON.parse(JSON.stringify(this.props.marketData.request)),
-            marketData: JSON.stringify(this.props.marketData.request),
-            calcResult: null
-        };*/
         this.handleClick = this.handleClick.bind(this)
 
-        console.log("calculation props: ", this.props)
-        console.log("calculation state: ", this.state)
+        //console.log("calculation props: ", this.props)
+        //console.log("calculation state: ", this.state)
 
     }
 
     async handleClick(){
         try {
-            let temp = CVAIRS;
-            temp.request.id = performance.now().toString();
-            console.log(`requesting calculation: ${temp.request.id}: `, temp.request)
-            let test = await this.props.calculate(temp)
-            console.log(`result for calculation ${temp.request.id}: ` , JSON.parse(test).response)
+            //let temp = option;
+            //console.log(option)
+            //temp.request.id = performance.now().toString();
+            //let test = 
+            console.log("click test: " ,  await this.props.calculate({
+                "request": {
+                    "excerciseStyle": 2,
+                    "id":performance.now(),
+                    "todaysDate":"1998-05-15",
+                    "settlementDate": "1998-05-17",
+                    "maturityDate": "1999-05-17",
+                    "optionType":1,
+                    "underlying": 36,
+                    "strike": 40,
+                    "dividendYield": 0,
+                    "riskFreeRate": 0.06,
+                    "optionPrice": 2.20
+                },
+                "response":{},
+                "errors":{}
+            }))
         }catch(error){
             console.log(`error in worker: ${error}`)
         }
