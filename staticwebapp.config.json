@@ -1,0 +1,7 @@
+ines (5 sloc)  70 Bytes
+
+{
+    "navigationFallback": {
+        "rewrite": "/index.html"
+    }
+}
